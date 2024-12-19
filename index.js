@@ -1,17 +1,19 @@
 const fs = require('fs');
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client } = require('discord.js');
+const express = require('express');
 
 const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.Reactions
-    ],
-    partials: ['MESSAGE', 'REACTION']
+const client = new Client({ partials: ['MESSAGE'] });
+
+const app = express();
+
+app.get('/', (req, res) => {
+    res.send('Bot is running!');
+});
+
+app.listen(process.env.PORT || 3000, () => {
+    console.log('Server is running');
 });
 
 client.on('ready', onReady);
@@ -21,30 +23,40 @@ client.on('messageReactionRemove', removeRole);
 client.login(process.env.BOT_TOKEN);
 
 async function onReady() {
-    const channel = await client.channels.fetch(config.channel);
+    const channel = client.channels.cache.find((channel) => channel.name === config.channel);
 
     try {
-        const messages = await channel.messages.fetch();
-        config.message_id = messages.first().id;
-        console.log(`Watching message '${config.message_id}' for reactions...`);
+        await channel.messages.fetch();
     } catch (err) {
         console.error('Error fetching channel messages', err);
-    }
-}
-
-async function addRole(reaction, user) {
-    if (user.bot || reaction.message.id !== config.message_id) {
         return;
     }
 
-    const { message, emoji } = reaction;
-    const { guild } = message;
+    config.message_id = channel.messages.first().id;
 
-    const member = await guild.members.fetch(user.id);
-    const role = guild.roles.cache.find((role) => role.name === config.roles[emoji.name]);
+    console.log(`Watching message '${config.message_id}' for reactions...`);
+}
+
+async function addRole({ message, _emoji }, user) {
+    if (user.bot || message.id !== config.message_id) {
+        return;
+    }
+
+    if (message.partial) {
+        try {
+            await message.fetch();
+        } catch (err) {
+            console.error('Error fetching message', err);
+            return;
+        }
+    }
+
+    const { guild } = message;
+    const member = guild.members.cache.get(user.id);
+    const role = guild.roles.cache.find((role) => role.name === config.roles[_emoji.name]);
 
     if (!role) {
-        console.error(`Role not found for '${emoji.name}'`);
+        console.error(`Role not found for '${_emoji.name}'`);
         return;
     }
 
@@ -55,19 +67,26 @@ async function addRole(reaction, user) {
     }
 }
 
-async function removeRole(reaction, user) {
-    if (user.bot || reaction.message.id !== config.message_id) {
+async function removeRole({ message, _emoji }, user) {
+    if (user.bot || message.id !== config.message_id) {
         return;
     }
 
-    const { message, emoji } = reaction;
-    const { guild } = message;
+    if (message.partial) {
+        try {
+            await message.fetch();
+        } catch (err) {
+            console.error('Error fetching message', err);
+            return;
+        }
+    }
 
-    const member = await guild.members.fetch(user.id);
-    const role = guild.roles.cache.find((role) => role.name === config.roles[emoji.name]);
+    const { guild } = message;
+    const member = guild.members.cache.get(user.id);
+    const role = guild.roles.cache.find((role) => role.name === config.roles[_emoji.name]);
 
     if (!role) {
-        console.error(`Role not found for '${emoji.name}'`);
+        console.error(`Role not found for '${_emoji.name}'`);
         return;
     }
 
