@@ -1,0 +1,9 @@
+{
+  "channel": "🎇┃reaction-roles",
+    "roles": {
+        "🔔": "Annoucements",
+        "📢": "Updates",
+        "📦": "Restocks",
+        "🌐": "AllPings"
+    }
+}
